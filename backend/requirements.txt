@@ -1,0 +1,18 @@
+# Framework Web Principal
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+
+# Base de Datos y Migraciones
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+
+# Integración con IA (SDKs Oficiales)
+google-generativeai
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+
+# Utilidades
+pydantic-settings>=2.2.0
+python-multipart>=0.0.9

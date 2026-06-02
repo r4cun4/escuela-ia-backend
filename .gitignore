@@ -1,0 +1,15 @@
+# Entornos virtuales locales
+.venv/
+__pycache__/
+*.pyc
+
+# Variables de entorno y llaves (¡CRÍTICO!)
+.env
+
+# Datos persistentes locales de Docker (Bases de datos y configs)
+data/
+n8n_data/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
