@@ -16,5 +16,4 @@ pytest-asyncio>=0.23.0
 # Utilidades
 pydantic-settings>=2.2.0
 python-multipart>=0.0.9
-docx2txt>=0.8
-pypdf>=4.2.0
+markitdown
