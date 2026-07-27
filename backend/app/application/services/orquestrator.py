@@ -1,5 +1,6 @@
 # app/application/services/orquestrator.py
 import re
+from typing import Dict
 from datetime import date
 from app.domain.entities.daily_summary import DailySummary, DomainException
 from app.ports.repositories import DailySummaryRepository
@@ -11,7 +12,7 @@ class ProcessDailyReportUseCase:
         self.repo = repo  # Inyección de interfaces
         self.llm = llm
 
-    def execute(self, target_date: date, raw_content: str, group_name: str) -> str:
+    def execute(self, target_date: date, raw_content: str, group_name: str, images: Dict[str, bytes] = None) -> str:
         if not raw_content.strip():
             return "No hay contenido para procesar."
 
@@ -29,9 +30,16 @@ class ProcessDailyReportUseCase:
             summary = summary.transition_to_processing()
             self.repo.save(summary)
 
-            # Le pasamos el nombre del grupo al servicio LLM para contextualizar el prompt de Gemini
+            # Filtramos solo las imágenes que pertenecen a los mensajes del día
+            filtered_images = {}
+            if images:
+                for filename, img_bytes in images.items():
+                    if filename in content_filtrado:
+                        filtered_images[filename] = img_bytes
+
+            # Le pasamos el nombre del grupo y las imágenes al servicio LLM
             summary_text = self.llm.generate_summary(
-                content_filtrado, group_name=group_name
+                content_filtrado, group_name=group_name, images=filtered_images
             )
 
             summary = summary.transition_to_completed(summary_text)

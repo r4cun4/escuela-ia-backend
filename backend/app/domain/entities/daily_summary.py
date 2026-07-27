@@ -17,13 +17,14 @@ class DomainException(Exception):
 class DailySummary:
     id: Optional[int]
     target_date: date
+    group_name: str
     state: SummaryState
     raw_content_hash: str
     summary_text: Optional[str] = None
     error_message: Optional[str] = None
 
     @staticmethod
-    def create_new(target_date: date, raw_content: str) -> "DailySummary":
+    def create_new(target_date: date, group_name: str, raw_content: str) -> "DailySummary":
         """Estado inicial: Crea el registro del día a procesar."""
         import hashlib
         content_hash = hashlib.sha256(raw_content.encode()).hexdigest()
@@ -31,6 +32,7 @@ class DailySummary:
         return DailySummary(
             id=None,
             target_date=target_date,
+            group_name=group_name,
             state=SummaryState.RECIBIDO,
             raw_content_hash=content_hash
         )
@@ -43,6 +45,7 @@ class DailySummary:
         return DailySummary(
             id=self.id,
             target_date=self.target_date,
+            group_name=self.group_name,
             state=SummaryState.PROCESANDO,
             raw_content_hash=self.raw_content_hash
         )
@@ -57,6 +60,7 @@ class DailySummary:
         return DailySummary(
             id=self.id,
             target_date=self.target_date,
+            group_name=self.group_name,
             state=SummaryState.COMPLETADO,
             raw_content_hash=self.raw_content_hash,
             summary_text=summary_text
@@ -70,6 +74,7 @@ class DailySummary:
         return DailySummary(
             id=self.id,
             target_date=self.target_date,
+            group_name=self.group_name,
             state=SummaryState.FALLIDO,
             raw_content_hash=self.raw_content_hash,
             error_message=reason
