@@ -3,31 +3,15 @@ import re
 import zipfile
 import io
 from datetime import date
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 from fastapi import APIRouter, UploadFile, File, Depends
-from sqlalchemy.orm import Session
 
-from app.application.services.orquestrator import ProcessDailyReportUseCase
-from app.infrastructure.database.session import get_db
-
-# ── 1. IMPORTÁ TUS IMPLEMENTACIONES CONCRETAS ─────────────────────────
-# Ajustá estas rutas según los nombres reales de tus archivos de infraestructura
-from app.infrastructure.database.repositories import SqliteDailySummaryRepository 
-from app.infrastructure.clients.gemini_client import GeminiLLMService
+from app.application.services.orquestrator import ProcessDailyReportUseCase, SearchDailySummariesUseCase
+from app.infrastructure.database.dependencies import get_report_use_case, get_search_use_case
 
 router = APIRouter()
 
 _ZIP_MAGIC = b"PK\x03\x04"
-
-# ── 2. FUNCIÓN FÁBRICA PARA INYECTAR DEPENDENCIAS ────────────────────
-def get_process_daily_report_use_case(db: Session = Depends(get_db)) -> ProcessDailyReportUseCase:
-    """
-    Acopla las implementaciones de infraestructura a los puertos del dominio
-    y expone el caso de uso completamente armado para FastAPI.
-    """
-    repo = SqliteDailySummaryRepository(db) # Tu repo real que implementa DailySummaryRepository
-    llm = GeminiLLMService()                # Tu servicio real que implementa LLMService
-    return ProcessDailyReportUseCase(repo=repo, llm=llm)
 
 
 def _extract_content_from_bytes(raw_bytes: bytes, filename: str) -> Tuple[str, Dict[str, bytes]]:
@@ -77,13 +61,12 @@ def _extract_content_from_bytes(raw_bytes: bytes, filename: str) -> Tuple[str, D
         return raw_bytes.decode("latin-1", errors="ignore").strip(), {}
 
 
-# ── 3. EL ENDPOINT ACTUALIZADO ────────────────────────────────────────
+# ── 1. ENDPOINT PARA PROCESAR REPORTE ─────────────────────────────────
 @router.post("/reporte/procesar")
 async def procesar_reporte(
     file: UploadFile = File(...),
     target_date_str: str = None, # Param opcional para forzar una fecha (YYYY-MM-DD)
-    # Clavamos la función fábrica dentro del Depends para blindar el caso de uso
-    use_case: ProcessDailyReportUseCase = Depends(get_process_daily_report_use_case)
+    use_case: ProcessDailyReportUseCase = Depends(get_report_use_case)
 ):
     filename = file.filename
     
@@ -109,3 +92,32 @@ async def procesar_reporte(
         "group": group_name,
         "data": resultado
     }
+
+
+# ── 2. ENDPOINT PARA BÚSQUEDA SEMÁNTICA CON AGENTE (RAG) ──────────────
+@router.get("/reporte/buscar")
+async def buscar_reportes(
+    query: str,
+    group_name: Optional[str] = None,
+    limit: int = 5,
+    use_case: SearchDailySummariesUseCase = Depends(get_search_use_case)
+):
+    """
+    Realiza una búsqueda semántica de resúmenes en ChromaDB y sintetiza
+    una respuesta redactada en lenguaje natural lista para consumir por Telegram.
+    """
+    resultado = use_case.execute(
+        query=query,
+        group_name=group_name,
+        limit=limit
+    )
+
+    return {
+        "status": "success",
+        "query": query,
+        "group_filter": group_name,
+        "answer": resultado.get("answer", ""),
+        "sources_count": len(resultado.get("sources", [])),
+        "sources": resultado.get("sources", [])
+    }
+

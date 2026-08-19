@@ -1,16 +1,23 @@
 # app/application/services/orquestrator.py
 import re
-from typing import Dict
+from typing import Dict, Optional, List
 from datetime import date
 from app.domain.entities.daily_summary import DailySummary, DomainException
 from app.ports.repositories import DailySummaryRepository
 from app.ports.llm_service import LLMService
+from app.ports.vector_store import VectorStoreRepository
 
 
 class ProcessDailyReportUseCase:
-    def __init__(self, repo: DailySummaryRepository, llm: LLMService):
+    def __init__(
+        self,
+        repo: DailySummaryRepository,
+        llm: LLMService,
+        vector_store: Optional[VectorStoreRepository] = None
+    ):
         self.repo = repo  # Inyección de interfaces
         self.llm = llm
+        self.vector_store = vector_store
 
     def execute(self, target_date: date, raw_content: str, group_name: str, images: Dict[str, bytes] = None) -> str:
         if not raw_content.strip():
@@ -43,7 +50,17 @@ class ProcessDailyReportUseCase:
             )
 
             summary = summary.transition_to_completed(summary_text)
-            self.repo.save(summary)
+            summary = self.repo.save(summary)
+
+            # Indexamos de forma vectorial en ChromaDB si el puerto está disponible
+            if self.vector_store:
+                self.vector_store.add_summary(
+                    summary_id=summary.id,
+                    target_date=str(summary.target_date),
+                    group_name=summary.group_name,
+                    summary_text=summary.summary_text
+                )
+
             return summary.summary_text
         except DomainException as e:
             summary = summary.transition_to_failed(str(e))
@@ -84,3 +101,42 @@ class ProcessDailyReportUseCase:
                     filtered_lines.append(line)
 
         return "\n".join(filtered_lines)
+
+
+class SearchDailySummariesUseCase:
+    def __init__(self, vector_store: VectorStoreRepository, school_agent: Optional[object] = None):
+        self.vector_store = vector_store
+        self.school_agent = school_agent
+
+    def execute(self, query: str, group_name: Optional[str] = None, limit: int = 4) -> Dict:
+        if not query or not query.strip():
+            return {
+                "answer": "La consulta no puede estar vacía.",
+                "sources": []
+            }
+
+        # 1. Recuperamos fragmentos más relevantes desde la base vectorial ChromaDB
+        docs = self.vector_store.search_similar(
+            query=query.strip(),
+            group_name=group_name,
+            limit=limit
+        )
+
+        # 2. Sintetizamos la respuesta redactada en lenguaje natural con el Agente escolar de Pydantic AI
+        if self.school_agent and hasattr(self.school_agent, "synthesize_answer"):
+            answer_text = self.school_agent.synthesize_answer(
+                query=query.strip(),
+                context_documents=docs,
+                group_name=group_name
+            )
+        else:
+            answer_text = (
+                f"Se encontraron {len(docs)} fragmentos relevantes en los resúmenes del colegio."
+            )
+
+        return {
+            "answer": answer_text,
+            "sources": docs
+        }
+
+
