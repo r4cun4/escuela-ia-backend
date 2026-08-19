@@ -3,6 +3,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./data/escuela.db"
+    CHROMA_PERSIST_DIRECTORY: str = "./data/chroma_db"
+    
+    # Pydantic Logfire Observabilidad
+    LOGFIRE_TOKEN: str = ""
+    LOGFIRE_ENVIRONMENT: str = "development"
     
     # Permitir sobreescribir desde variables de entorno y archivo .env
     model_config = SettingsConfigDict(
@@ -12,3 +17,5 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
+
+

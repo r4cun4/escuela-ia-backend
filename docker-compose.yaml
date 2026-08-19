@@ -12,8 +12,11 @@ services:
     environment:
       - PYTHONPATH=/app
       - DATABASE_URL=sqlite:///./data/escuela.db
+      - CHROMA_PERSIST_DIRECTORY=/app/data/chroma_db
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_API_VERSION=v1
+      - LOGFIRE_TOKEN=${LOGFIRE_TOKEN:-}
+      - LOGFIRE_ENVIRONMENT=${LOGFIRE_ENVIRONMENT:-development}
     restart: always
 
   n8n:
