@@ -22,18 +22,21 @@ def get_vector_store() -> VectorStoreRepository:
 def get_school_agent() -> SchoolAgent:
     return SchoolAgent()
 
+def get_llm_service() -> LLMService:
+    return GeminiLLMService()
+
 def get_report_use_case(
     db: Session = Depends(get_db),
-    vector_store: VectorStoreRepository = Depends(get_vector_store)
+    vector_store: VectorStoreRepository = Depends(get_vector_store),
+    llm_service: LLMService = Depends(get_llm_service)
 ) -> ProcessDailyReportUseCase:
     """
     Fábrica encargada de resolver las dependencias de infraestructura
     e inyectarlas en el Caso de Uso de Aplicación.
     """
     concrete_repo: DailySummaryRepository = SqliteDailySummaryRepository(db)
-    concrete_llm: LLMService = GeminiLLMService()
     
-    return ProcessDailyReportUseCase(repo=concrete_repo, llm=concrete_llm, vector_store=vector_store)
+    return ProcessDailyReportUseCase(repo=concrete_repo, llm=llm_service, vector_store=vector_store)
 
 def get_search_use_case(
     vector_store: VectorStoreRepository = Depends(get_vector_store),
