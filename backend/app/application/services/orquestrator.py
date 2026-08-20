@@ -19,7 +19,14 @@ class ProcessDailyReportUseCase:
         self.llm = llm
         self.vector_store = vector_store
 
-    def execute(self, target_date: date, raw_content: str, group_name: str, images: Dict[str, bytes] = None) -> str:
+    def execute(
+        self,
+        target_date: date,
+        raw_content: str,
+        group_name: str,
+        images: Optional[Dict[str, bytes]] = None,
+        audios: Optional[Dict[str, bytes]] = None
+    ) -> str:
         if not raw_content.strip():
             return "No hay contenido para procesar."
 
@@ -44,9 +51,16 @@ class ProcessDailyReportUseCase:
                     if filename in content_filtrado:
                         filtered_images[filename] = img_bytes
 
-            # Le pasamos el nombre del grupo y las imágenes al servicio LLM
+            # Filtramos solo los audios que pertenecen a los mensajes del día
+            filtered_audios = {}
+            if audios:
+                for filename, audio_bytes in audios.items():
+                    if filename in content_filtrado:
+                        filtered_audios[filename] = audio_bytes
+
+            # Le pasamos el nombre del grupo, las imágenes y audios al servicio LLM
             summary_text = self.llm.generate_summary(
-                content_filtrado, group_name=group_name, images=filtered_images
+                content_filtrado, group_name=group_name, images=filtered_images, audios=filtered_audios
             )
 
             summary = summary.transition_to_completed(summary_text)

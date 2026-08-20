@@ -1,9 +1,20 @@
 # app/infrastructure/clients/gemini_client.py
 import os
-from typing import Dict
+from typing import Dict, Optional
 from google import genai
 from google.genai import types
 from app.ports.llm_service import LLMService
+
+
+def _get_audio_mime_type(filename: str) -> str:
+    fn = filename.lower()
+    if fn.endswith(".mp3"):
+        return "audio/mp3"
+    elif fn.endswith(".wav"):
+        return "audio/wav"
+    elif fn.endswith(".m4a") or fn.endswith(".mp4"):
+        return "audio/mp4"
+    return "audio/ogg"  # .opus, .ogg por defecto
 
 
 class GeminiLLMService(LLMService):
@@ -15,13 +26,20 @@ class GeminiLLMService(LLMService):
         self.client = genai.Client(api_key=api_key)
         self.model_name = "gemini-2.5-flash"
 
-    def generate_summary(self, raw_content: str, group_name: str = "", images: Dict[str, bytes] = None) -> str:
+    def generate_summary(
+        self,
+        raw_content: str,
+        group_name: str = "",
+        images: Optional[Dict[str, bytes]] = None,
+        audios: Optional[Dict[str, bytes]] = None
+    ) -> str:
         prompt = (
             "Actuás como un asistente escolar inteligente. Tu tarea es procesar un texto caótico extraído "
             f"de notificaciones, mails y grupos de WhatsApp de mamás/papás de un colegio, específicamente del grupo '{group_name}'.\n\n"
             "Generá un resumen ejecutivo, claro, organizado por prioridades, tareas pendientes y fechas "
             "importantes de forma humana y directa. Si hay cosas irrelevantes o quejas, ignoralas. "
-            "Si te adjuntan imágenes (como circulares o fotos del pizarrón), extrae la información relevante de ellas y sumala al resumen.\n\n"
+            "Si te adjuntan imágenes (como circulares o fotos del pizarrón) o notas de voz/audios, "
+            "extrae la información relevante de ellos y sumala al resumen.\n\n"
             f"Texto a procesar:\n{raw_content}"
         )
 
@@ -33,6 +51,13 @@ class GeminiLLMService(LLMService):
                     types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
                 )
 
+        if audios:
+            for filename, audio_bytes in audios.items():
+                mime_type = _get_audio_mime_type(filename)
+                contents.append(
+                    types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                )
+
         try:
             response = self.client.models.generate_content(
                 model=self.model_name,
@@ -40,4 +65,20 @@ class GeminiLLMService(LLMService):
             )
             return response.text
         except Exception as e:
-            raise RuntimeError(f"Error al conectar con la API de Gemini: {str(e)}")
+            raise RuntimeError(f"Error al conectar con la API de Gemini: {str(e)}")
+
+    def transcribe_audio_query(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
+        prompt = (
+            "Escuchá la siguiente nota de voz y transcribí o sintetizá en una sola frase limpia "
+            "la pregunta o consulta hecha por el usuario, sin agregar introducciones ni explicaciones."
+        )
+        part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+        try:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[prompt, part],
+            )
+            return response.text.strip()
+        except Exception as e:
+            raise RuntimeError(f"Error al procesar el audio de consulta con la API de Gemini: {str(e)}")
+
