@@ -14,7 +14,7 @@
 | **Servidor ASGI** | Uvicorn | `>=0.28.0` |
 | **ORM / Persistencia** | SQLAlchemy | `>=2.0.0` |
 | **Base de Datos** | SQLite | `data/escuela.db` |
-| **IA / LLM** | Google GenAI SDK | `google-genai>=1.0.0` (Modelo `gemini-2.5-flash`) |
+| **IA / LLM** | Google GenAI SDK | `google-genai>=1.0.0` (Modelo `gemini-3.6-flash`) |
 | **Orquestación** | Docker & Docker Compose | Contenedores para `fastapi-backend` y `n8n` |
 | **Testing** | Pytest | `pytest>=8.0.0`, `pytest-asyncio` |
 

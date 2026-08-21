@@ -18,7 +18,7 @@ class ChromaVectorStoreRepository(VectorStoreRepository):
         
         # Cliente oficial de Google GenAI para generar embeddings
         self.genai_client = genai.Client(api_key=api_key)
-        self.embedding_model = "text-embedding-004"
+        self.embedding_model = "gemini-embedding-2"
 
         # Cliente Nativo de ChromaDB
         self.chroma_client = chromadb.PersistentClient(path=self.persist_directory)
@@ -32,7 +32,7 @@ class ChromaVectorStoreRepository(VectorStoreRepository):
             model=self.embedding_model,
             contents=text
         )
-        return response.embedding.values
+        return response.embeddings[0].values
 
     def add_summary(self, summary_id: int, target_date: str, group_name: str, summary_text: str) -> None:
         embedding_vector = self._generate_embedding(summary_text)

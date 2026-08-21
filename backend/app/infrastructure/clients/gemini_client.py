@@ -24,7 +24,7 @@ class GeminiLLMService(LLMService):
             raise RuntimeError("Falta la variable de entorno GEMINI_API_KEY")
 
         self.client = genai.Client(api_key=api_key)
-        self.model_name = "gemini-2.5-flash"
+        self.model_name = "gemini-3.6-flash"
 
     def generate_summary(
         self,
@@ -88,4 +88,4 @@ class GeminiLLMService(LLMService):
             return response.text.strip()
         except Exception as e:
             raise RuntimeError(f"Error al procesar el audio de consulta con la API de Gemini: {str(e)}")
-
+

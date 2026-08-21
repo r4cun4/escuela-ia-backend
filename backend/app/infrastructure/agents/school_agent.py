@@ -14,7 +14,7 @@ SYSTEM_PROMPT = (
 
 
 class SchoolAgent:
-    def __init__(self, model_name: str = "google-gla:gemini-2.5-flash"):
+    def __init__(self, model_name: str = "google:gemini-3.6-flash"):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("Falta la variable de entorno GEMINI_API_KEY")

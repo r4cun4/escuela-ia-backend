@@ -1,5 +1,4 @@
 services:
-
   fastapi-backend:
     build:
       context: ./backend
@@ -21,18 +20,26 @@ services:
 
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
+    # command: start --tunnel  <-- ELIMINAMOS ESTO
     ports:
       - "5678:5678"
     volumes:
       - ./n8n_data:/home/node/.n8n
     environment:
-      # Evita que ejecuciones colgadas queden en loop tras un restart
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL} # <-- LA INYECTAMOS POR VARIABLE
       - EXECUTIONS_TIMEOUT=120
       - EXECUTIONS_TIMEOUT_MAX=300
-      # Guarda datos solo en error para diagnosticar sin acumular basura
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
       - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
-      # Marca ejecuciones previas como 'crashed' en lugar de dejarlas en 'running'
       - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=30
     restart: always
+
+  # NUEVO SERVICIO: Túnel de Cloudflare
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # Apuntamos el túnel al nombre del servicio de n8n y su puerto interno
+    command: tunnel --url http://n8n:5678
+    restart: always
+    depends_on:
+      - n8n
