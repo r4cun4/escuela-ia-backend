@@ -1,6 +1,5 @@
-# app/application/services/orquestrator.py
 import re
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from datetime import date
 from app.domain.entities.daily_summary import DailySummary, DomainException
 from app.ports.repositories import DailySummaryRepository
@@ -25,42 +24,56 @@ class ProcessDailyReportUseCase:
         raw_content: str,
         group_name: str,
         images: Optional[Dict[str, bytes]] = None,
-        audios: Optional[Dict[str, bytes]] = None
+        audios: Optional[Dict[str, bytes]] = None,
+        documents: Optional[Dict[str, Tuple[bytes, str]]] = None,
+        is_chat_log: bool = True
     ) -> str:
-        if not raw_content.strip():
-            return "No hay contenido para procesar."
+        if not raw_content.strip() and not documents and not images and not audios:
+            return "No hay contenido ni adjuntos para procesar."
 
-        # ✂️ Filtramos el contenido para quedarnos SOLO con los mensajes del día objetivo
-        content_filtrado = self._filtrar_chat_por_fecha(raw_content, target_date)
-
-        if not content_filtrado.strip():
-            return f"No se encontraron mensajes para la fecha: {target_date}"
+        if is_chat_log:
+            # ✂️ Filtramos el contenido para quedarnos SOLO con los mensajes del día objetivo
+            content_filtrado = self._filtrar_chat_por_fecha(raw_content, target_date)
+            if not content_filtrado.strip():
+                return f"No se encontraron mensajes para la fecha: {target_date}"
+        else:
+            content_filtrado = raw_content.strip()
 
         # Creamos la entidad inyectando de forma obligatoria el nombre del grupo
-        summary = DailySummary.create_new(target_date, group_name, content_filtrado)
+        summary = DailySummary.create_new(target_date, group_name, content_filtrado or "Reporte escolar con adjuntos")
         summary = self.repo.save(summary)
 
         try:
             summary = summary.transition_to_processing()
             self.repo.save(summary)
 
-            # Filtramos solo las imágenes que pertenecen a los mensajes del día
             filtered_images = {}
             if images:
-                for filename, img_bytes in images.items():
-                    if filename in content_filtrado:
-                        filtered_images[filename] = img_bytes
+                if is_chat_log:
+                    for filename, img_bytes in images.items():
+                        if filename in content_filtrado:
+                            filtered_images[filename] = img_bytes
+                else:
+                    filtered_images = images
 
-            # Filtramos solo los audios que pertenecen a los mensajes del día
             filtered_audios = {}
             if audios:
-                for filename, audio_bytes in audios.items():
-                    if filename in content_filtrado:
-                        filtered_audios[filename] = audio_bytes
+                if is_chat_log:
+                    for filename, audio_bytes in audios.items():
+                        if filename in content_filtrado:
+                            filtered_audios[filename] = audio_bytes
+                else:
+                    filtered_audios = audios
 
-            # Le pasamos el nombre del grupo, las imágenes y audios al servicio LLM
+            filtered_documents = documents or {}
+
+            # Le pasamos el nombre del grupo, las imágenes, audios y documentos al servicio LLM
             summary_text = self.llm.generate_summary(
-                content_filtrado, group_name=group_name, images=filtered_images, audios=filtered_audios
+                content_filtrado,
+                group_name=group_name,
+                images=filtered_images,
+                audios=filtered_audios,
+                documents=filtered_documents
             )
 
             summary = summary.transition_to_completed(summary_text)

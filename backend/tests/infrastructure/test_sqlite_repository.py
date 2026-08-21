@@ -25,7 +25,7 @@ def test_save_and_get_by_date(db_session):
     hoy = date(2026, 6, 2)
     
     # 1. Crear y guardar un nuevo resumen diario
-    summary = DailySummary.create_new(hoy, "Contenido de prueba")
+    summary = DailySummary.create_new(hoy, "Grupo Test", "Contenido de prueba")
     saved_summary = repo.save(summary)
     
     # Verificar que se asignó un ID autoincremental

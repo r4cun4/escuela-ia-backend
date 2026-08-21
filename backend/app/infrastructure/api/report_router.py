@@ -1,10 +1,10 @@
-# app/infrastructure/api/report_router.py
 import re
 import zipfile
 import io
+import mimetypes
 from datetime import date
-from typing import Tuple, Dict, Optional
-from fastapi import APIRouter, UploadFile, File, Depends
+from typing import Tuple, Dict, Optional, List
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 
 from app.application.services.orquestrator import ProcessDailyReportUseCase, SearchDailySummariesUseCase
 from app.ports.llm_service import LLMService
@@ -68,18 +68,22 @@ def _extract_content_from_bytes(raw_bytes: bytes, filename: str) -> Tuple[str, D
         return raw_bytes.decode("latin-1", errors="ignore").strip(), {}, {}
 
 
-# ── 1. ENDPOINT PARA PROCESAR REPORTE ─────────────────────────────────
+# ── 1. ENDPOINT PARA PROCESAR REPORTE WHATSAPP (.ZIP / .TXT) ─────────
 @router.post("/reporte/procesar")
 async def procesar_reporte(
     file: UploadFile = File(...),
-    target_date_str: str = None, # Param opcional para forzar una fecha (YYYY-MM-DD)
+    group_name: Optional[str] = None,
+    target_date_str: Optional[str] = None, # Param opcional para forzar una fecha (YYYY-MM-DD)
     use_case: ProcessDailyReportUseCase = Depends(get_report_use_case)
 ):
-    filename = file.filename
+    filename = file.filename or "chat.zip"
     
-    group_name = re.sub(r'^(Chat de WhatsApp con\s+)', '', filename, flags=re.IGNORECASE)
-    group_name = re.sub(r'(\.zip|\.txt)$', '', group_name, flags=re.IGNORECASE)
-    group_name = group_name.strip()
+    if not group_name or not group_name.strip():
+        derived_group = re.sub(r'^(Chat de WhatsApp con\s+)', '', filename, flags=re.IGNORECASE)
+        derived_group = re.sub(r'(\.zip|\.txt)$', '', derived_group, flags=re.IGNORECASE)
+        group_name = derived_group.strip()
+    else:
+        group_name = group_name.strip()
 
     raw_bytes = await file.read()
     texto_extraido, images_extraidas, audios_extraidos = _extract_content_from_bytes(raw_bytes, filename)
@@ -92,12 +96,91 @@ async def procesar_reporte(
         raw_content=texto_extraido,
         group_name=group_name,
         images=images_extraidas,
-        audios=audios_extraidos
+        audios=audios_extraidos,
+        is_chat_log=True
     )
     
     return {
         "status": "success",
         "group": group_name,
+        "data": resultado
+    }
+
+
+# ── 2. ENDPOINT PARA PROCESAR CORREOS DEL COLEGIO (BODY + ADJUNTOS) ───
+@router.post("/reporte/email")
+async def procesar_reporte_email(
+    subject: str = Form(""),
+    body: str = Form(""),
+    group_name: Optional[str] = Form(None),
+    target_date_str: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
+    file: Optional[UploadFile] = File(default=None),
+    use_case: ProcessDailyReportUseCase = Depends(get_report_use_case)
+):
+    """
+    Recibe correos del colegio con texto en el cuerpo y/o archivos adjuntos (PDFs, imágenes, etc.).
+    Extrae la información mediante Gemini multimodal y guarda el resumen.
+    """
+    all_files = list(files)
+    if file:
+        all_files.append(file)
+
+    images: Dict[str, bytes] = {}
+    audios: Dict[str, bytes] = {}
+    documents: Dict[str, Tuple[bytes, str]] = {}
+
+    for uploaded_file in all_files:
+        if not uploaded_file.filename:
+            continue
+        fn = uploaded_file.filename
+        fn_lower = fn.lower()
+        content = await uploaded_file.read()
+        if not content:
+            continue
+
+        guessed_type, _ = mimetypes.guess_type(fn)
+
+        if fn_lower.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            images[fn] = content
+        elif fn_lower.endswith(_AUDIO_EXTENSIONS):
+            audios[fn] = content
+        elif fn_lower.endswith('.pdf'):
+            documents[fn] = (content, "application/pdf")
+        elif fn_lower.endswith('.txt'):
+            documents[fn] = (content, "text/plain")
+        elif fn_lower.endswith('.csv'):
+            documents[fn] = (content, "text/csv")
+        else:
+            resolved_mime = guessed_type or "application/octet-stream"
+            documents[fn] = (content, resolved_mime)
+
+    raw_content = ""
+    if subject.strip():
+        raw_content += f"Asunto: {subject.strip()}\n\n"
+    if body.strip():
+        raw_content += f"Cuerpo:\n{body.strip()}"
+    raw_content = raw_content.strip()
+
+    if not raw_content and not images and not audios and not documents:
+        raise HTTPException(status_code=400, detail="No se recibió ningún texto ni archivo adjunto en el correo.")
+
+    final_group = group_name.strip() if group_name and group_name.strip() else "Colegio Oficial"
+    target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
+
+    resultado = use_case.execute(
+        target_date=target_date,
+        raw_content=raw_content,
+        group_name=final_group,
+        images=images,
+        audios=audios,
+        documents=documents,
+        is_chat_log=False
+    )
+
+    return {
+        "status": "success",
+        "group": final_group,
         "data": resultado
     }
 

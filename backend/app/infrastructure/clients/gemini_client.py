@@ -1,6 +1,6 @@
 # app/infrastructure/clients/gemini_client.py
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from google import genai
 from google.genai import types
 from app.ports.llm_service import LLMService
@@ -31,22 +31,23 @@ class GeminiLLMService(LLMService):
         raw_content: str,
         group_name: str = "",
         images: Optional[Dict[str, bytes]] = None,
-        audios: Optional[Dict[str, bytes]] = None
+        audios: Optional[Dict[str, bytes]] = None,
+        documents: Optional[Dict[str, Tuple[bytes, str]]] = None
     ) -> str:
         prompt = (
-            "Actuás como un asistente escolar inteligente. Tu tarea es procesar un texto caótico extraído "
-            f"de notificaciones, mails y grupos de WhatsApp de mamás/papás de un colegio, específicamente del grupo '{group_name}'.\n\n"
+            "Actuás como un asistente escolar inteligente. Tu tarea es procesar un texto extraído "
+            f"de notificaciones, mails o grupos del colegio, específicamente del grupo o tema '{group_name}'.\n\n"
             "Generá un resumen ejecutivo, claro, organizado por prioridades, tareas pendientes y fechas "
             "importantes de forma humana y directa. Si hay cosas irrelevantes o quejas, ignoralas. "
-            "Si te adjuntan imágenes (como circulares o fotos del pizarrón) o notas de voz/audios, "
-            "extrae la información relevante de ellos y sumala al resumen.\n\n"
+            "Si te adjuntan imágenes (como circulares o fotos del pizarrón), notas de voz/audios, o "
+            "documentos y adjuntos (PDFs, etc.), extrae la información relevante de ellos y sumala al resumen.\n\n"
             f"Texto a procesar:\n{raw_content}"
         )
 
         contents = [prompt]
         if images:
             for filename, img_bytes in images.items():
-                mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
+                mime_type = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
                 contents.append(
                     types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
                 )
@@ -56,6 +57,12 @@ class GeminiLLMService(LLMService):
                 mime_type = _get_audio_mime_type(filename)
                 contents.append(
                     types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                )
+
+        if documents:
+            for filename, (doc_bytes, mime_type) in documents.items():
+                contents.append(
+                    types.Part.from_bytes(data=doc_bytes, mime_type=mime_type)
                 )
 
         try:
