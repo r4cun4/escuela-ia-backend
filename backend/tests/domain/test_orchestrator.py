@@ -1,6 +1,6 @@
 # tests/domain/test_orchestrator.py
 from datetime import date
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from app.domain.entities.daily_summary import DailySummary, SummaryState
 from app.ports.repositories import DailySummaryRepository
 from app.ports.llm_service import LLMService
@@ -41,11 +41,14 @@ class FakeLLMService(LLMService):
         raw_content: str,
         group_name: str = "",
         images: Optional[Dict[str, bytes]] = None,
-        audios: Optional[Dict[str, bytes]] = None
+        audios: Optional[Dict[str, bytes]] = None,
+        documents: Optional[Dict[str, Tuple[bytes, str]]] = None
     ) -> str:
         res = "Resumen IA: Todo OK en el colegio."
         if audios:
             res += f" Audios procesados: {len(audios)}"
+        if documents:
+            res += f" Documentos procesados: {len(documents)}"
         return res
 
     def transcribe_audio_query(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
@@ -160,5 +163,35 @@ def test_search_use_case_with_pydantic_ai_agent():
     assert len(res["sources"]) == 1
     assert res["sources"][0]["metadata"]["group_name"] == "4to A"
     assert "matemáticas" in res["sources"][0]["content"]
+
+
+def test_orchestrator_should_process_email_reports_with_documents():
+    fake_repo = FakeDailySummaryRepository()
+    fake_llm = FakeLLMService()
+    fake_vector_store = FakeVectorStoreRepository()
+
+    use_case = ProcessDailyReportUseCase(
+        repo=fake_repo,
+        llm=fake_llm,
+        vector_store=fake_vector_store
+    )
+
+    hoy = date(2026, 6, 2)
+    email_text = "Asunto: Circular Informativa - Salida de Campo\n\nCuerpo:\nEstimados padres, adjuntamos la autorización."
+    documents = {"circular.pdf": (b"%PDF-1.4...", "application/pdf")}
+
+    resultado_final = use_case.execute(
+        target_date=hoy,
+        raw_content=email_text,
+        group_name="Colegio Oficial",
+        documents=documents,
+        is_chat_log=False
+    )
+
+    assert "Documentos procesados: 1" in resultado_final
+    reporte = fake_repo.get_by_date(hoy)
+    assert reporte is not None
+    assert reporte.group_name == "Colegio Oficial"
+
 
 

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 class LLMService(ABC):
     
@@ -9,10 +9,11 @@ class LLMService(ABC):
         raw_content: str,
         group_name: str = "",
         images: Optional[Dict[str, bytes]] = None,
-        audios: Optional[Dict[str, bytes]] = None
+        audios: Optional[Dict[str, bytes]] = None,
+        documents: Optional[Dict[str, Tuple[bytes, str]]] = None
     ) -> str:
         """
-        Toma el choclo de texto unificado del día (mails + chats) y diccionarios opcionales de imágenes y audios, 
+        Toma el choclo de texto unificado del día (mails + chats) y diccionarios opcionales de imágenes, audios y documentos, 
         y devuelve el resumen estructurado por la IA.
         """
         pass
