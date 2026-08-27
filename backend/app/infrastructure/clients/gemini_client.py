@@ -65,14 +65,25 @@ class GeminiLLMService(LLMService):
                     types.Part.from_bytes(data=doc_bytes, mime_type=mime_type)
                 )
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=contents,
-            )
-            return response.text
-        except Exception as e:
-            raise RuntimeError(f"Error al conectar con la API de Gemini: {str(e)}")
+        import time
+        models_to_try = [self.model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
+        last_exception = None
+
+        for model in models_to_try:
+            for attempt in range(3):
+                try:
+                    response = self.client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                    )
+                    if response and response.text:
+                        return response.text
+                except Exception as e:
+                    last_exception = e
+                    time.sleep(1 * (attempt + 1))
+                    continue
+
+        raise RuntimeError(f"Error al conectar con la API de Gemini: {str(last_exception)}")
 
     def transcribe_audio_query(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
         prompt = (

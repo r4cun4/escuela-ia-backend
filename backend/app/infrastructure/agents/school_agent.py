@@ -27,7 +27,7 @@ class SchoolAgent:
             system_prompt=SYSTEM_PROMPT
         )
 
-    def synthesize_answer(self, query: str, context_documents: List[Dict], group_name: Optional[str] = None) -> str:
+    async def synthesize_answer(self, query: str, context_documents: List[Dict], group_name: Optional[str] = None) -> str:
         if not context_documents:
             return "No se encontró información relevante en los resúmenes escolares para responder a tu consulta."
 
@@ -49,8 +49,9 @@ class SchoolAgent:
         )
 
         try:
-            result = self.agent.run_sync(prompt)
-            return result.data
+            result = await self.agent.run(prompt)
+            answer = getattr(result, "output", None) or getattr(result, "data", None)
+            return str(answer) if answer is not None else str(result)
         except Exception as e:
             # Fallback en caso de error de conexión/modelo
             return f"No se pudo generar la respuesta redactada debido a un error: {str(e)}"

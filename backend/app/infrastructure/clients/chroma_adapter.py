@@ -21,7 +21,22 @@ class ChromaVectorStoreRepository(VectorStoreRepository):
         self.embedding_model = "gemini-embedding-2"
 
         # Cliente Nativo de ChromaDB
-        self.chroma_client = chromadb.PersistentClient(path=self.persist_directory)
+        try:
+            self.chroma_client = chromadb.PersistentClient(
+                path=self.persist_directory,
+                settings=chromadb.Settings(anonymized_telemetry=False)
+            )
+        except Exception:
+            try:
+                from chromadb.api.shared_system_client import SharedSystemClient
+                SharedSystemClient._identifier_to_system.clear()
+            except Exception:
+                pass
+            self.chroma_client = chromadb.PersistentClient(
+                path=self.persist_directory,
+                settings=chromadb.Settings(anonymized_telemetry=False)
+            )
+
         self.collection = self.chroma_client.get_or_create_collection(
             name="escuela_summaries",
             metadata={"hnsw:space": "cosine"}

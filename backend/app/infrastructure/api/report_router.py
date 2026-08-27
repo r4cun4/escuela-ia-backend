@@ -1,10 +1,17 @@
+import os
 import re
 import zipfile
 import io
 import mimetypes
 from datetime import date
-from typing import Tuple, Dict, Optional, List
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from typing import Tuple, Dict, Optional, List, Union
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
+
+try:
+    from markitdown import MarkItDown
+    _markitdown = MarkItDown()
+except Exception:
+    _markitdown = None
 
 from app.application.services.orquestrator import ProcessDailyReportUseCase, SearchDailySummariesUseCase
 from app.ports.llm_service import LLMService
@@ -110,25 +117,37 @@ async def procesar_reporte(
 # ── 2. ENDPOINT PARA PROCESAR CORREOS DEL COLEGIO (BODY + ADJUNTOS) ───
 @router.post("/reporte/email")
 async def procesar_reporte_email(
+    request: Request,
     subject: str = Form(""),
     body: str = Form(""),
     group_name: Optional[str] = Form(None),
     target_date_str: Optional[str] = Form(None),
-    files: List[UploadFile] = File(default=[]),
-    file: Optional[UploadFile] = File(default=None),
     use_case: ProcessDailyReportUseCase = Depends(get_report_use_case)
 ):
     """
     Recibe correos del colegio con texto en el cuerpo y/o archivos adjuntos (PDFs, imágenes, etc.).
     Extrae la información mediante Gemini multimodal y guarda el resumen.
     """
-    all_files = list(files)
-    if file:
-        all_files.append(file)
+    form_data = await request.form()
+    all_files: List[UploadFile] = []
+    
+    print("=== DEBUG EMAIL ENDPOINT ===")
+    print(f"subject: '{subject}'")
+    print(f"body len: {len(body)} | body snippet: '{body[:100]}'")
+    print(f"form_data keys: {[k for k, _ in form_data.multi_items()]}")
+    
+    for _, value in form_data.multi_items():
+        if isinstance(value, UploadFile) and value.filename:
+            all_files.append(value)
+
+    print(f"all_files count: {len(all_files)}")
+    for f in all_files:
+        print(f" -> File: {f.filename} | content_type: {f.content_type}")
 
     images: Dict[str, bytes] = {}
     audios: Dict[str, bytes] = {}
     documents: Dict[str, Tuple[bytes, str]] = {}
+    extracted_doc_texts: List[str] = []
 
     for uploaded_file in all_files:
         if not uploaded_file.filename:
@@ -145,21 +164,34 @@ async def procesar_reporte_email(
             images[fn] = content
         elif fn_lower.endswith(_AUDIO_EXTENSIONS):
             audios[fn] = content
-        elif fn_lower.endswith('.pdf'):
-            documents[fn] = (content, "application/pdf")
-        elif fn_lower.endswith('.txt'):
-            documents[fn] = (content, "text/plain")
-        elif fn_lower.endswith('.csv'):
-            documents[fn] = (content, "text/csv")
         else:
-            resolved_mime = guessed_type or "application/octet-stream"
+            if fn_lower.endswith('.pdf'):
+                resolved_mime = "application/pdf"
+            elif fn_lower.endswith('.txt'):
+                resolved_mime = "text/plain"
+            elif fn_lower.endswith('.csv'):
+                resolved_mime = "text/csv"
+            else:
+                resolved_mime = guessed_type or "application/octet-stream"
+            
             documents[fn] = (content, resolved_mime)
+
+            if _markitdown:
+                try:
+                    ext = os.path.splitext(fn_lower)[1] or ".pdf"
+                    res = _markitdown.convert_stream(io.BytesIO(content), file_extension=ext)
+                    if res and res.text_content and res.text_content.strip():
+                        extracted_doc_texts.append(f"--- Contenido extraído del adjunto '{fn}' ---\n{res.text_content.strip()}")
+                except Exception:
+                    pass
 
     raw_content = ""
     if subject.strip():
         raw_content += f"Asunto: {subject.strip()}\n\n"
     if body.strip():
-        raw_content += f"Cuerpo:\n{body.strip()}"
+        raw_content += f"Cuerpo:\n{body.strip()}\n\n"
+    if extracted_doc_texts:
+        raw_content += "\n\n".join(extracted_doc_texts)
     raw_content = raw_content.strip()
 
     if not raw_content and not images and not audios and not documents:
@@ -197,7 +229,7 @@ async def buscar_reportes(
     Realiza una búsqueda semántica de resúmenes en ChromaDB y sintetiza
     una respuesta redactada en lenguaje natural lista para consumir por Telegram.
     """
-    resultado = use_case.execute(
+    resultado = await use_case.execute(
         query=query,
         group_name=group_name,
         limit=limit
@@ -238,7 +270,7 @@ async def buscar_reportes_por_audio(
     raw_bytes = await file.read()
     transcribed_query = llm_service.transcribe_audio_query(raw_bytes, mime_type=mime_type)
 
-    resultado = use_case.execute(
+    resultado = await use_case.execute(
         query=transcribed_query,
         group_name=group_name,
         limit=limit

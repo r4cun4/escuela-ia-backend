@@ -16,8 +16,21 @@ from app.infrastructure.clients.gemini_client import GeminiLLMService
 from app.infrastructure.clients.chroma_adapter import ChromaVectorStoreRepository
 from app.infrastructure.agents.school_agent import SchoolAgent
 
+_vector_store_instance = None
+
 def get_vector_store() -> VectorStoreRepository:
-    return ChromaVectorStoreRepository()
+    global _vector_store_instance
+    if _vector_store_instance is None:
+        try:
+            _vector_store_instance = ChromaVectorStoreRepository()
+        except Exception:
+            try:
+                from chromadb.api.shared_system_client import SharedSystemClient
+                SharedSystemClient._identifier_to_system.clear()
+            except Exception:
+                pass
+            _vector_store_instance = ChromaVectorStoreRepository()
+    return _vector_store_instance
 
 def get_school_agent() -> SchoolAgent:
     return SchoolAgent()

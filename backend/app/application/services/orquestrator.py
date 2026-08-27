@@ -1,3 +1,4 @@
+import inspect
 import re
 from typing import Dict, Optional, List, Tuple
 from datetime import date
@@ -45,7 +46,7 @@ class ProcessDailyReportUseCase:
 
         try:
             summary = summary.transition_to_processing()
-            self.repo.save(summary)
+            summary = self.repo.save(summary)
 
             filtered_images = {}
             if images:
@@ -135,7 +136,7 @@ class SearchDailySummariesUseCase:
         self.vector_store = vector_store
         self.school_agent = school_agent
 
-    def execute(self, query: str, group_name: Optional[str] = None, limit: int = 4) -> Dict:
+    async def execute(self, query: str, group_name: Optional[str] = None, limit: int = 4) -> Dict:
         if not query or not query.strip():
             return {
                 "answer": "La consulta no puede estar vacía.",
@@ -151,11 +152,18 @@ class SearchDailySummariesUseCase:
 
         # 2. Sintetizamos la respuesta redactada en lenguaje natural con el Agente escolar de Pydantic AI
         if self.school_agent and hasattr(self.school_agent, "synthesize_answer"):
-            answer_text = self.school_agent.synthesize_answer(
-                query=query.strip(),
-                context_documents=docs,
-                group_name=group_name
-            )
+            if inspect.iscoroutinefunction(self.school_agent.synthesize_answer):
+                answer_text = await self.school_agent.synthesize_answer(
+                    query=query.strip(),
+                    context_documents=docs,
+                    group_name=group_name
+                )
+            else:
+                answer_text = self.school_agent.synthesize_answer(
+                    query=query.strip(),
+                    context_documents=docs,
+                    group_name=group_name
+                )
         else:
             answer_text = (
                 f"Se encontraron {len(docs)} fragmentos relevantes en los resúmenes del colegio."
