@@ -130,19 +130,13 @@ async def procesar_reporte_email(
     """
     form_data = await request.form()
     all_files: List[UploadFile] = []
-    
-    print("=== DEBUG EMAIL ENDPOINT ===")
-    print(f"subject: '{subject}'")
-    print(f"body len: {len(body)} | body snippet: '{body[:100]}'")
-    print(f"form_data keys: {[k for k, _ in form_data.multi_items()]}")
-    
+
+    # Usamos hasattr (duck typing) porque request.form() devuelve starlette.UploadFile,
+    # que es la clase padre de fastapi.UploadFile — isinstance(padre, Hijo) daría False.
     for _, value in form_data.multi_items():
-        if isinstance(value, UploadFile) and value.filename:
+        if hasattr(value, 'filename') and hasattr(value, 'read') and getattr(value, 'filename', None):
             all_files.append(value)
 
-    print(f"all_files count: {len(all_files)}")
-    for f in all_files:
-        print(f" -> File: {f.filename} | content_type: {f.content_type}")
 
     images: Dict[str, bytes] = {}
     audios: Dict[str, bytes] = {}
