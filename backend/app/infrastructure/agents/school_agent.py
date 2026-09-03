@@ -1,4 +1,4 @@
-# app/infrastructure/agents/school_agent.py
+import asyncio
 import os
 from typing import List, Dict, Optional
 from pydantic_ai import Agent
@@ -48,10 +48,15 @@ class SchoolAgent:
             "Redactá una respuesta ejecutiva y cordial en lenguaje natural lista para enviar por Telegram."
         )
 
-        try:
-            result = await self.agent.run(prompt)
-            answer = getattr(result, "output", None) or getattr(result, "data", None)
-            return str(answer) if answer is not None else str(result)
-        except Exception as e:
-            # Fallback en caso de error de conexión/modelo
-            return f"No se pudo generar la respuesta redactada debido a un error: {str(e)}"
+        last_error = None
+        for attempt in range(4):
+            try:
+                result = await self.agent.run(prompt)
+                answer = getattr(result, "output", None) or getattr(result, "data", None)
+                return str(answer) if answer is not None else str(result)
+            except Exception as e:
+                last_error = e
+                # Reintento con backoff exponencial para absorber picos temporales 503
+                await asyncio.sleep(2 * (attempt + 1))
+
+        return f"No se pudo generar la respuesta redactada debido a un error: {str(last_error)}"

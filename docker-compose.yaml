@@ -35,11 +35,15 @@ services:
       - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=30
     restart: always
 
-  # NUEVO SERVICIO: Túnel de Cloudflare
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    # Apuntamos el túnel al nombre del servicio de n8n y su puerto interno
-    command: tunnel --url http://n8n:5678
+  # Túnel persistente con ngrok (URL fija)
+  ngrok:
+    image: ngrok/ngrok:latest
     restart: always
+    command:
+      - "http"
+      - "n8n:5678"
+      - "--url=https://perceive-debating-tabasco.ngrok-free.dev"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     depends_on:
       - n8n
