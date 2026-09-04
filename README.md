@@ -49,7 +49,7 @@ En el contexto escolar actual, la gran cantidad de mensajes diarios en grupos de
 * 📧 **Adjuntos PDF y Mails**: Extracción de datos importantes de circulares oficiales e información enviada por email.
 * 🧠 **RAG Nativo (ChromaDB)**: Indexado vectorial alimentado con `gemini-embedding-001` para consultas de contexto histórico.
 * 🤖 **Agente Inteligente con Pydantic AI**: Orquestación estructurada de agentes e integración con **Logfire** para observabilidad en tiempo real.
-* ⚡ **Integración n8n + Telegram**: Flujos automáticos que reciben mensajes de Telegram y los envían al backend a través de un túnel seguro de **Cloudflare**.
+* ⚡ **Integración n8n + Telegram**: Flujos automáticos que reciben mensajes de Telegram y los envían al backend a través de un túnel persistente con **ngrok**.
 
 ---
 
@@ -91,7 +91,7 @@ graph TD
 | **Embeddings & RAG**| ChromaDB + Gemini Embeddings | Base de datos vectorial persistente |
 | **Agentes & Tracing**| Pydantic AI, Pydantic Logfire | Estructuración de agentes y trazabilidad |
 | **Persistencia** | SQLAlchemy + SQLite | Registro relacional de historiales y estados |
-| **Automatización** | n8n + Cloudflare Tunnel | Integración de flujos de trabajo y webhooks |
+| **Automatización** | n8n + ngrok | Integración de flujos de trabajo y túnel persistente para webhooks |
 | **Contenedores** | Docker & Docker Compose | Entorno encapsulado multilabor |
 
 ---
@@ -102,6 +102,7 @@ Antes de comenzar, asegúrate de contar con:
 * [Python 3.11+](https://www.python.org/downloads/)
 * [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 * Una **API Key de Google Gemini** (obtenible en [Google AI Studio](https://aistudio.google.com/))
+* Una cuenta y **Authtoken de ngrok** (con un dominio estático gratuito configurado en [ngrok Dashboard](https://dashboard.ngrok.com/))
 * (Opcional) Token de [Logfire](https://logfire.pydantic.dev/) para observabilidad.
 
 ---
@@ -125,16 +126,19 @@ LOGFIRE_ENVIRONMENT=development
 
 # Telegram & n8n
 TELEGRAM_BOT_TOKEN=tu_bot_token_telegram
-N8N_WEBHOOK_URL=https://tu-tunel.trycloudflare.com
+N8N_WEBHOOK_URL=https://tu-dominio.ngrok-free.dev
+
+# ngrok
+NGROK_AUTHTOKEN=tu_authtoken_de_ngrok
 ```
 
 ---
 
 ## 🐳 Despliegue con Docker
 
-Para levantar toda la infraestructura (FastAPI Backend, n8n y Cloudflare Tunnel):
+Para levantar toda la infraestructura (FastAPI Backend, n8n y el contenedor de túnel ngrok):
 
-```bash
+```powershell
 # Clonar el repositorio
 git clone https://github.com/r4cun4/escuela-ia-bot.git
 cd escuela-ia-bot
@@ -148,13 +152,8 @@ Los servicios estarán disponibles en:
 * **Documentación Swagger UI**: `http://localhost:8000/docs`
 * **n8n Workflow**: `http://localhost:5678`
 
-### Script de actualización automática de Túnel y Webhook
-El proyecto incluye un script de automatización para registrar la URL dinámica de Cloudflare en Telegram:
-
-```bash
-chmod +x tunnel_watcher.sh update_tunnel_url.sh
-./tunnel_watcher.sh
-```
+### Configuración del Túnel ngrok
+El servicio `ngrok` en `docker-compose.yaml` expone n8n hacia Internet usando una URL estática gratuita (`--url=https://tu-dominio.ngrok-free.dev`). Esto garantiza que el webhook de Telegram configurado en n8n permanezca persistente sin necesidad de scripts de actualización dinámica.
 
 ---
 
@@ -196,7 +195,7 @@ Para ejecutar la suite de pruebas unitarias e integración:
 # Crear entorno virtual e instalar dependencias
 cd backend
 python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
+.\venv\Scripts\Activate.ps1  # En Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
 
 # Ejecutar pytest
