@@ -13,7 +13,8 @@ try:
 except Exception:
     _markitdown = None
 
-from app.application.services.orquestrator import ProcessDailyReportUseCase, SearchDailySummariesUseCase
+from app.application.services.process_daily_report_use_case import ProcessDailyReportUseCase
+from app.application.services.search_daily_summaries_use_case import SearchDailySummariesUseCase
 from app.ports.llm_service import LLMService
 from app.infrastructure.database.dependencies import get_report_use_case, get_search_use_case, get_llm_service
 
@@ -77,7 +78,7 @@ def _extract_content_from_bytes(raw_bytes: bytes, filename: str) -> Tuple[str, D
 
 # ── 1. ENDPOINT PARA PROCESAR REPORTE WHATSAPP (.ZIP / .TXT) ─────────
 @router.post("/reporte/procesar")
-async def procesar_reporte(
+async def process_report(
     file: UploadFile = File(...),
     group_name: Optional[str] = None,
     target_date_str: Optional[str] = None, # Param opcional para forzar una fecha (YYYY-MM-DD)
@@ -93,30 +94,30 @@ async def procesar_reporte(
         group_name = group_name.strip()
 
     raw_bytes = await file.read()
-    texto_extraido, images_extraidas, audios_extraidos = _extract_content_from_bytes(raw_bytes, filename)
+    extracted_text, extracted_images, extracted_audios = _extract_content_from_bytes(raw_bytes, filename)
 
     # Si nos pasan fecha la usamos, sino usamos hoy
     target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
 
-    resultado = use_case.execute(
+    result = use_case.execute(
         target_date=target_date,
-        raw_content=texto_extraido,
+        raw_content=extracted_text,
         group_name=group_name,
-        images=images_extraidas,
-        audios=audios_extraidos,
+        images=extracted_images,
+        audios=extracted_audios,
         is_chat_log=True
     )
     
     return {
         "status": "success",
         "group": group_name,
-        "data": resultado
+        "data": result
     }
 
 
 # ── 2. ENDPOINT PARA PROCESAR CORREOS DEL COLEGIO (BODY + ADJUNTOS) ───
 @router.post("/reporte/email")
-async def procesar_reporte_email(
+async def process_email_report(
     request: Request,
     subject: str = Form(""),
     body: str = Form(""),
@@ -194,7 +195,7 @@ async def procesar_reporte_email(
     final_group = group_name.strip() if group_name and group_name.strip() else "Colegio Oficial"
     target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
 
-    resultado = use_case.execute(
+    result = use_case.execute(
         target_date=target_date,
         raw_content=raw_content,
         group_name=final_group,
@@ -207,13 +208,13 @@ async def procesar_reporte_email(
     return {
         "status": "success",
         "group": final_group,
-        "data": resultado
+        "data": result
     }
 
 
-# ── 2. ENDPOINT PARA BÚSQUEDA SEMÁNTICA CON AGENTE (RAG) ──────────────
+# ── 3. ENDPOINT PARA BÚSQUEDA SEMÁNTICA CON AGENTE (RAG) ──────────────
 @router.get("/reporte/buscar")
-async def buscar_reportes(
+async def search_reports(
     query: str,
     group_name: Optional[str] = None,
     limit: int = 5,
@@ -223,7 +224,7 @@ async def buscar_reportes(
     Realiza una búsqueda semántica de resúmenes en ChromaDB y sintetiza
     una respuesta redactada en lenguaje natural lista para consumir por Telegram.
     """
-    resultado = await use_case.execute(
+    result = await use_case.execute(
         query=query,
         group_name=group_name,
         limit=limit
@@ -233,15 +234,15 @@ async def buscar_reportes(
         "status": "success",
         "query": query,
         "group_filter": group_name,
-        "answer": resultado.get("answer", ""),
-        "sources_count": len(resultado.get("sources", [])),
-        "sources": resultado.get("sources", [])
+        "answer": result.get("answer", ""),
+        "sources_count": len(result.get("sources", [])),
+        "sources": result.get("sources", [])
     }
 
 
-# ── 3. ENDPOINT PARA BÚSQUEDA SEMÁNTICA DESDE AUDIO/VOZ ───────────────
+# ── 4. ENDPOINT PARA BÚSQUEDA SEMÁNTICA DESDE AUDIO/VOZ ───────────────
 @router.post("/reporte/buscar-audio")
-async def buscar_reportes_por_audio(
+async def search_reports_by_audio(
     file: UploadFile = File(...),
     group_name: Optional[str] = None,
     limit: int = 5,
@@ -264,7 +265,7 @@ async def buscar_reportes_por_audio(
     raw_bytes = await file.read()
     transcribed_query = llm_service.transcribe_audio_query(raw_bytes, mime_type=mime_type)
 
-    resultado = await use_case.execute(
+    result = await use_case.execute(
         query=transcribed_query,
         group_name=group_name,
         limit=limit
@@ -274,9 +275,9 @@ async def buscar_reportes_por_audio(
         "status": "success",
         "transcribed_query": transcribed_query,
         "group_filter": group_name,
-        "answer": resultado.get("answer", ""),
-        "sources_count": len(resultado.get("sources", [])),
-        "sources": resultado.get("sources", [])
+        "answer": result.get("answer", ""),
+        "sources_count": len(result.get("sources", [])),
+        "sources": result.get("sources", [])
     }
 
 

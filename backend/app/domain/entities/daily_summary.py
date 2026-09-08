@@ -5,6 +5,12 @@ from datetime import date
 from typing import Optional
 
 class SummaryState(Enum):
+    RECEIVED = "recibido"
+    PROCESSING = "procesando"
+    COMPLETED = "completado"
+    FAILED = "fallido"
+
+    # Alias para retrocompatibilidad
     RECIBIDO = "recibido"
     PROCESANDO = "procesando"
     COMPLETADO = "completado"
@@ -33,26 +39,26 @@ class DailySummary:
             id=None,
             target_date=target_date,
             group_name=group_name,
-            state=SummaryState.RECIBIDO,
+            state=SummaryState.RECEIVED,
             raw_content_hash=content_hash
         )
 
     def transition_to_processing(self) -> "DailySummary":
         """Transición: El sistema empieza a hablar con el LLM."""
-        if self.state != SummaryState.RECIBIDO and self.state != SummaryState.FALLIDO:
+        if self.state != SummaryState.RECEIVED and self.state != SummaryState.FAILED:
             raise DomainException(f"No se puede procesar un resumen en estado {self.state}")
         
         return DailySummary(
             id=self.id,
             target_date=self.target_date,
             group_name=self.group_name,
-            state=SummaryState.PROCESANDO,
+            state=SummaryState.PROCESSING,
             raw_content_hash=self.raw_content_hash
         )
 
     def transition_to_completed(self, summary_text: str) -> "DailySummary":
         """Transición exitosa: Se guarda el resumen final."""
-        if self.state != SummaryState.PROCESANDO:
+        if self.state != SummaryState.PROCESSING:
             raise DomainException("Solo se puede completar un resumen que esté en procesamiento")
         if not summary_text.strip():
             raise DomainException("El texto del resumen no puede estar vacío")
@@ -61,21 +67,21 @@ class DailySummary:
             id=self.id,
             target_date=self.target_date,
             group_name=self.group_name,
-            state=SummaryState.COMPLETADO,
+            state=SummaryState.COMPLETED,
             raw_content_hash=self.raw_content_hash,
             summary_text=summary_text
         )
 
     def transition_to_failed(self, reason: str) -> "DailySummary":
         """Transición de error."""
-        if self.state != SummaryState.PROCESANDO:
+        if self.state != SummaryState.PROCESSING:
             raise DomainException("Estado de error inválido")
             
         return DailySummary(
             id=self.id,
             target_date=self.target_date,
             group_name=self.group_name,
-            state=SummaryState.FALLIDO,
+            state=SummaryState.FAILED,
             raw_content_hash=self.raw_content_hash,
             error_message=reason
         )

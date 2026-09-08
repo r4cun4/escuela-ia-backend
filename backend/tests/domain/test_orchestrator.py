@@ -1,11 +1,15 @@
 # tests/domain/test_orchestrator.py
 from datetime import date
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Any
+import pytest
+
 from app.domain.entities.daily_summary import DailySummary, SummaryState
 from app.ports.repositories import DailySummaryRepository
 from app.ports.llm_service import LLMService
 from app.ports.vector_store import VectorStoreRepository
-from app.application.services.orquestrator import ProcessDailyReportUseCase, SearchDailySummariesUseCase
+from app.ports.school_agent import SchoolAgentPort
+from app.application.services.process_daily_report_use_case import ProcessDailyReportUseCase
+from app.application.services.search_daily_summaries_use_case import SearchDailySummariesUseCase
 
 # ─── 1. FABRICAMOS IMPLEMENTACIONES EN MEMORIA PARA EL TEST ───
 
@@ -31,6 +35,9 @@ class FakeDailySummaryRepository(DailySummaryRepository):
         return summary
 
     def get_by_date(self, target_date: date) -> Optional[DailySummary]:
+        return self.db.get(target_date)
+
+    def get_by_date_and_group(self, target_date: date, group_name: str) -> Optional[DailySummary]:
         return self.db.get(target_date)
 
 
@@ -68,7 +75,14 @@ class FakeVectorStoreRepository(VectorStoreRepository):
             "summary_text": summary_text
         })
 
-    def search_similar(self, query: str, group_name: Optional[str] = None, limit: int = 4) -> List[Dict]:
+    def search_similar(
+        self,
+        query: str,
+        group_name: Optional[str] = None,
+        limit: int = 4,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> List[Dict]:
         results = []
         for doc in self.indexed_docs:
             if group_name and doc["group_name"] != group_name:
@@ -85,8 +99,11 @@ class FakeVectorStoreRepository(VectorStoreRepository):
         return results[:limit]
 
 
-class FakeSchoolAgent:
-    def synthesize_answer(self, query: str, context_documents: List[Dict], group_name: Optional[str] = None) -> str:
+class FakeSchoolAgent(SchoolAgentPort):
+    async def run_agentic(self, query: str, deps: Any) -> str:
+        return "Respuesta sintetizada para Telegram: El examen de matemáticas es el viernes."
+
+    async def synthesize_answer(self, query: str, context_documents: List[Dict], group_name: Optional[str] = None) -> str:
         return "Respuesta sintetizada para Telegram: El examen de matemáticas es el viernes."
 
 
@@ -116,7 +133,7 @@ def test_orchestrator_should_process_lifecycle_and_index_vector_store():
     # Verificamos estado COMPLETADO en repo SQL
     reporte_guardado = fake_repo.get_by_date(hoy)
     assert reporte_guardado is not None
-    assert reporte_guardado.state == SummaryState.COMPLETADO
+    assert reporte_guardado.state == SummaryState.COMPLETED
     assert reporte_guardado.summary_text == "Resumen IA: Todo OK en el colegio."
 
     # Verificamos indexación en Vector Store
@@ -151,13 +168,14 @@ def test_orchestrator_should_process_audios():
     assert "Audios procesados: 1" in resultado_final
 
 
-def test_search_use_case_with_pydantic_ai_agent():
+@pytest.mark.asyncio
+async def test_search_use_case_with_pydantic_ai_agent():
     fake_vector_store = FakeVectorStoreRepository()
     fake_vector_store.add_summary(1, "2026-06-02", "4to A", "Examen de matemáticas el viernes.")
     fake_agent = FakeSchoolAgent()
 
     search_use_case = SearchDailySummariesUseCase(vector_store=fake_vector_store, school_agent=fake_agent)
-    res = search_use_case.execute(query="matematicas", group_name="4to A")
+    res = await search_use_case.execute(query="matematicas", group_name="4to A")
 
     assert res["answer"] == "Respuesta sintetizada para Telegram: El examen de matemáticas es el viernes."
     assert len(res["sources"]) == 1

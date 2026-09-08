@@ -64,11 +64,31 @@ class ChromaVectorStoreRepository(VectorStoreRepository):
             }]
         )
 
-    def search_similar(self, query: str, group_name: Optional[str] = None, limit: int = 4) -> List[Dict]:
+    def search_similar(
+        self,
+        query: str,
+        group_name: Optional[str] = None,
+        limit: int = 4,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> List[Dict]:
         query_vector = self._generate_embedding(query)
-        where_filter = None
+
+        # Construimos filtro combinado: grupo + rango temporal
+        where_clauses = []
         if group_name and group_name.strip():
-            where_filter = {"group_name": group_name.strip()}
+            where_clauses.append({"group_name": group_name.strip()})
+        if date_from:
+            where_clauses.append({"target_date": {"$gte": date_from}})
+        if date_to:
+            where_clauses.append({"target_date": {"$lte": date_to}})
+
+        if len(where_clauses) > 1:
+            where_filter = {"$and": where_clauses}
+        elif len(where_clauses) == 1:
+            where_filter = where_clauses[0]
+        else:
+            where_filter = None
 
         res = self.collection.query(
             query_embeddings=[query_vector],

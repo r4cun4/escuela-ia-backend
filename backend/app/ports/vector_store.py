@@ -12,8 +12,16 @@ class VectorStoreRepository(ABC):
         pass
 
     @abstractmethod
-    def search_similar(self, query: str, group_name: Optional[str] = None, limit: int = 4) -> List[Dict]:
+    def search_similar(
+        self,
+        query: str,
+        group_name: Optional[str] = None,
+        limit: int = 4,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> List[Dict]:
         """
-        Realiza una búsqueda semántica por similitud con filtrado opcional por grupo.
+        Realiza una búsqueda semántica por similitud con filtrado opcional por grupo
+        y rango de fechas (formato YYYY-MM-DD).
         """
         pass

@@ -2,12 +2,15 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 
 # Capa de Aplicación
-from app.application.services.orquestrator import ProcessDailyReportUseCase, SearchDailySummariesUseCase
+from app.application.services.process_daily_report_use_case import ProcessDailyReportUseCase
+from app.application.services.search_daily_summaries_use_case import SearchDailySummariesUseCase
+from app.application.services.search_service import GracefulSearchService
 
 # Puertos (Abstracciones)
 from app.ports.repositories import DailySummaryRepository
 from app.ports.llm_service import LLMService
 from app.ports.vector_store import VectorStoreRepository
+from app.ports.school_agent import SchoolAgentPort
 
 # Infraestructura (Detalles Concretos)
 from app.infrastructure.database.session import get_db
@@ -32,7 +35,7 @@ def get_vector_store() -> VectorStoreRepository:
             _vector_store_instance = ChromaVectorStoreRepository()
     return _vector_store_instance
 
-def get_school_agent() -> SchoolAgent:
+def get_school_agent() -> SchoolAgentPort:
     return SchoolAgent()
 
 def get_llm_service() -> LLMService:
@@ -53,7 +56,16 @@ def get_report_use_case(
 
 def get_search_use_case(
     vector_store: VectorStoreRepository = Depends(get_vector_store),
-    school_agent: SchoolAgent = Depends(get_school_agent)
+    school_agent: SchoolAgentPort = Depends(get_school_agent)
 ) -> SearchDailySummariesUseCase:
-    return SearchDailySummariesUseCase(vector_store=vector_store, school_agent=school_agent)
+    """
+    Fábrica que compone el GracefulSearchService (degradación en capas)
+    e inyecta en el Caso de Uso de Búsqueda.
+    """
+    search_service = GracefulSearchService(
+        school_agent=school_agent,
+        vector_store=vector_store,
+    )
+    return SearchDailySummariesUseCase(search_service=search_service)
+
 

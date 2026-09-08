@@ -30,7 +30,7 @@ def test_save_and_get_by_date(db_session):
     
     # Verificar que se asignó un ID autoincremental
     assert saved_summary.id is not None
-    assert saved_summary.state == SummaryState.RECIBIDO
+    assert saved_summary.state == SummaryState.RECEIVED
     
     # 2. Recuperar el resumen por fecha
     retrieved = repo.get_by_date(hoy)
@@ -44,5 +44,5 @@ def test_save_and_get_by_date(db_session):
     
     # Verificar que el estado se actualizó en la base de datos
     retrieved_updated = repo.get_by_date(hoy)
-    assert retrieved_updated.state == SummaryState.PROCESANDO
+    assert retrieved_updated.state == SummaryState.PROCESSING
     assert retrieved_updated.id == saved_summary.id
