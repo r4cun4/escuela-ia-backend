@@ -178,6 +178,23 @@ async def test_search_use_case_with_pydantic_ai_agent():
     res = await search_use_case.execute(query="matematicas", group_name="4to A")
 
     assert res["answer"] == "Respuesta sintetizada para Telegram: El examen de matemáticas es el viernes."
+    assert res["degradation_level"] == 0
+    assert res["sources"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_use_case_graceful_degradation_to_level_1():
+    fake_vector_store = FakeVectorStoreRepository()
+    fake_vector_store.add_summary(1, "2026-06-02", "4to A", "Examen de matemáticas el viernes.")
+
+    class FailingAgent(FakeSchoolAgent):
+        async def run_agentic(self, query: str, deps: Any) -> str:
+            raise RuntimeError("Agente no disponible temporalmente")
+
+    search_use_case = SearchDailySummariesUseCase(vector_store=fake_vector_store, school_agent=FailingAgent())
+    res = await search_use_case.execute(query="matematicas", group_name="4to A")
+
+    assert res["degradation_level"] == 1
     assert len(res["sources"]) == 1
     assert res["sources"][0]["metadata"]["group_name"] == "4to A"
     assert "matemáticas" in res["sources"][0]["content"]
