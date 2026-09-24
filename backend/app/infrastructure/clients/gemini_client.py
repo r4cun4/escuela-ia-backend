@@ -1,8 +1,10 @@
 # app/infrastructure/clients/gemini_client.py
 import os
-from typing import Dict, Optional, Tuple
+import time
+from typing import Dict, Optional, Tuple, List, Any
 from google import genai
 from google.genai import types
+from google.genai.errors import APIError, ClientError
 from app.ports.llm_service import LLMService
 
 
@@ -25,6 +27,39 @@ class GeminiLLMService(LLMService):
 
         self.client = genai.Client(api_key=api_key)
         self.model_name = "gemini-3.6-flash"
+
+    def _generate_with_fallback(self, contents: List[Any]) -> str:
+        models_to_try = [self.model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
+        last_exception = None
+
+        for model in models_to_try:
+            for attempt in range(3):
+                try:
+                    response = self.client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                    )
+                    if response and response.text:
+                        return response.text
+                except (APIError, ClientError) as e:
+                    last_exception = e
+                    # Para ClientError/APIError buscamos el status code
+                    # ya que la estructura exacta varía según cómo falle.
+                    code = getattr(e, 'code', getattr(e, 'status_code', None))
+                    
+                    # Fallar rápido si es un 4xx (Bad Request, Unauthorized, etc) que no sea Rate Limit (429)
+                    if isinstance(code, int) and 400 <= code < 500 and code != 429:
+                        raise e
+                    
+                    # 429 (Rate Limit) o 5xx: Backoff exponencial
+                    time.sleep(2 ** attempt)
+                    continue
+                except Exception as e:
+                    last_exception = e
+                    time.sleep(1 * (attempt + 1))
+                    continue
+
+        raise RuntimeError(f"Error al conectar con la API de Gemini: {str(last_exception)}")
 
     def generate_summary(
         self,
@@ -65,25 +100,7 @@ class GeminiLLMService(LLMService):
                     types.Part.from_bytes(data=doc_bytes, mime_type=mime_type)
                 )
 
-        import time
-        models_to_try = [self.model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
-        last_exception = None
-
-        for model in models_to_try:
-            for attempt in range(3):
-                try:
-                    response = self.client.models.generate_content(
-                        model=model,
-                        contents=contents,
-                    )
-                    if response and response.text:
-                        return response.text
-                except Exception as e:
-                    last_exception = e
-                    time.sleep(1 * (attempt + 1))
-                    continue
-
-        raise RuntimeError(f"Error al conectar con la API de Gemini: {str(last_exception)}")
+        return self._generate_with_fallback(contents)
 
     def transcribe_audio_query(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
         prompt = (
@@ -91,12 +108,8 @@ class GeminiLLMService(LLMService):
             "la pregunta o consulta hecha por el usuario, sin agregar introducciones ni explicaciones."
         )
         part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=[prompt, part],
-            )
-            return response.text.strip()
-        except Exception as e:
-            raise RuntimeError(f"Error al procesar el audio de consulta con la API de Gemini: {str(e)}")
+        
+        response_text = self._generate_with_fallback([prompt, part])
+        return response_text.strip()
+
 
