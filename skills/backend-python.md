@@ -1,8 +1,7 @@
 ﻿# Skill: Backend Python & FastAPI
 
-## Perfil y Stack
-- **Rol:** Backend Developer Semi Senior (+2 años en sector financiero).
-- **Stack:** Python, FastAPI, SQLAlchemy, Alembic, Celery, Docker.
+## Stack y Herramientas
+- **Ecosistema:** Python, FastAPI, SQLAlchemy, Alembic, Celery, Docker.
 - **Herramientas:** Ruff (linter/formateador), PydanticAI, Gestor uv.
 
 ## Arquitectura y Clean Code
