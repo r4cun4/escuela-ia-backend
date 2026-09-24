@@ -21,6 +21,11 @@
 
 ## 📝 Historial de Cambios
 
+### [2026-09-24] - Mejora en el Fallback de Gemini Client
+- Se refactorizó la lógica de reintentos y fallback en `GeminiLLMService` (`gemini_client.py`).
+- Se extrajo el bloque `try/except` duplicado en un nuevo método privado `_generate_with_fallback`.
+- Se implementó un filtro de excepciones capturando `APIError` y `ClientError` para fallar rápido en errores `4xx` (Bad Request, etc.) y reintentar con backoff exponencial (1s, 2s, 4s) en errores `429` (Rate limit) o `500` (Server Error).
+
 ### [2026-09-24] - Creación de la Bitácora Inicial
 - Relevamiento general de la estructura del repositorio (`pyproject.toml`, `README.md`, componentes en `backend/app`).
 - Inicialización del archivo `PROGRESS.md` siguiendo la especificación del skill `project-logger`.
