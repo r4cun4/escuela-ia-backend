@@ -8,7 +8,7 @@
 ## 🏗️ Decisiones Técnicas (ADRs)
 - **Arquitectura Hexagonal:** Separación estricta entre capa de aplicación, puertos y adaptadores de infraestructura (`GeminiLLMService`, `ChromaAdapter`).
 - **Resiliencia y Fallback de Modelos Gemini:** Adopción de la lista oficial de alias (`gemini-flash-latest`, `gemini-flash-lite-latest`) y modelos estables vigentes de Google Gemini en `GeminiLLMService._generate_with_fallback`. Ignora modelos obsoletos/deprecados por Google (`2.0-flash` / `1.5-flash`) y maneja backoff exponencial ante errores `429 RESOURCE_EXHAUSTED`.
-- **Exportación / Respaldo de Tableros n8n:** Extracción de flujos desde `database.sqlite` a JSON (`escuela_ia_bot_workflow.json`) para facilitar la portabilidad del tablero en entornos locales nuevos.
+- **Exportación / Respaldo de Tableros n8n:** Extracción de flujos desde `database.sqlite` a JSON (`n8n_workflow_escuela_ia_bot.json`) para facilitar la portabilidad del tablero en entornos locales nuevos.
 
 ## 🚀 Próximos Pasos (Roadmap)
 - Validar el flujo end-to-end de envío de mensajes de voz en Telegram con transcripción vía Gemini.
@@ -25,7 +25,7 @@
 - **Calidad de análisis en CI/CD:** Se actualizó el modelo por defecto de `PRReviewerAgent` (`pr_reviewer.py`) de `gemini-1.5-pro` a `gemini-2.5-pro` para priorizar la calidad de análisis en revisiones automáticas de Pull Requests.
 
 ### [2026-09-24] - Soporte de Modelos Oficiales Gemini & Recuperación de n8n
-- **Migración y Respaldo n8n:** Se recuperó el tablero del Bot de Escuela IA desde `database.sqlite` y se exportó a `escuela_ia_bot_workflow.json`.
+- **Migración y Respaldo n8n:** Se recuperó el tablero del Bot de Escuela IA desde `database.sqlite` y se exportó a `n8n_workflow_escuela_ia_bot.json`.
 - **Resiliencia en Gemini Client:** Se actualizó `GeminiLLMService` (`gemini_client.py`) integrando `transcribe_audio_query` con la estrategia `_generate_with_fallback`.
 - **Actualización de Modelos Gemini:** Se reemplazaron modelos deprecados por la lista oficial de la API de Google Gemini (`gemini-flash-latest`, `gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-2.5-flash`, `gemini-flash-lite-latest`).
 - **Despliegue:** Reinicio exitoso del servicio `fastapi-backend` en Docker.

@@ -10,6 +10,9 @@ __pycache__/
 data/
 n8n_data/
 
+# Exports de n8n (pueden contener IDs de credenciales internas)
+n8n_workflow_*.json
+
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
