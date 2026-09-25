@@ -59,7 +59,7 @@ class SchoolAgent(SchoolAgentPort):
     - Lineal (synthesize_answer): recibe documentos pre-recuperados y sintetiza (fallback Nivel 1).
     """
 
-    def __init__(self, model_name: str = "google:gemini-3.6-flash"):
+    def __init__(self, model_name: str = "google:gemini-3.8-flash"):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("Falta la variable de entorno GEMINI_API_KEY")

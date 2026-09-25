@@ -26,10 +26,15 @@ class GeminiLLMService(LLMService):
             raise RuntimeError("Falta la variable de entorno GEMINI_API_KEY")
 
         self.client = genai.Client(api_key=api_key)
-        self.model_name = "gemini-3.6-flash"
+        self.model_name = "gemini-3.8-flash"
 
     def _generate_with_fallback(self, contents: List[Any]) -> str:
-        models_to_try = [self.model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
+        models_to_try = [
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest",
+        ]
         last_exception = None
 
         for model in models_to_try:
